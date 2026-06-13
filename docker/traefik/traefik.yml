@@ -1,0 +1,29 @@
+api:
+  dashboard: false
+
+entryPoints:
+  http:
+    address: ":80"
+    http:
+      redirections:
+        entryPoint:
+          to: https
+          scheme: https
+  https:
+    address: ":443"
+
+certificatesResolvers:
+  letsencrypt:
+    acme:
+      email: admin@vuhom.com
+      storage: /etc/traefik/acme.json
+      httpChallenge:
+        entryPoint: http
+
+providers:
+  docker:
+    exposedByDefault: false
+    network: proxy
+
+log:
+  level: INFO
