@@ -7,15 +7,6 @@ resource "aws_s3_bucket" "app" {
   bucket   = each.key
 }
 
-resource "aws_s3_bucket_ownership_controls" "app" {
-  for_each = toset(local.buckets)
-  bucket   = aws_s3_bucket.app[each.key].id
-
-  rule {
-    object_ownership = "BucketOwnerPreferred"
-  }
-}
-
 resource "aws_s3_bucket_public_access_block" "app" {
   for_each = toset(local.buckets)
   bucket   = aws_s3_bucket.app[each.key].id
@@ -31,8 +22,5 @@ resource "aws_s3_bucket_acl" "app" {
   bucket   = aws_s3_bucket.app[each.key].id
   acl      = "public-read"
 
-  depends_on = [
-    aws_s3_bucket_ownership_controls.app,
-    aws_s3_bucket_public_access_block.app,
-  ]
+  depends_on = [aws_s3_bucket_public_access_block.app]
 }
