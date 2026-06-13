@@ -1,0 +1,14 @@
+# Terraform
+terraform/.terraform/
+terraform/.terraform.lock.hcl
+terraform/terraform.tfstate
+terraform/terraform.tfstate.backup
+terraform/*.tfplan
+terraform/*.tfvars
+terraform/override.tf
+terraform/override.tf.json
+
+# Secrets / local data
+*.txt
+*.env
+.env*
