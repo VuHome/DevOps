@@ -21,9 +21,9 @@ certificatesResolvers:
         entryPoint: http
 
 providers:
-  docker:
-    exposedByDefault: false
-    network: proxy
+  file:
+    filename: /etc/traefik/dynamic.yml
+    watch: true
 
 log:
   level: INFO

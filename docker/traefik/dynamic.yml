@@ -1,0 +1,28 @@
+http:
+  routers:
+    platform:
+      rule: "Host(`vuhom.com`) || Host(`www.vuhom.com`)"
+      entryPoints:
+        - https
+      tls:
+        certResolver: letsencrypt
+      service: platform
+
+    api:
+      rule: "Host(`api.vuhom.com`)"
+      entryPoints:
+        - https
+      tls:
+        certResolver: letsencrypt
+      service: api
+
+  services:
+    platform:
+      loadBalancer:
+        servers:
+          - url: "http://vuhom-platform:3000"
+
+    api:
+      loadBalancer:
+        servers:
+          - url: "http://vuhom-api:8003"
