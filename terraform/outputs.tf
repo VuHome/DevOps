@@ -1,5 +1,5 @@
 output "floating_ip" {
-  value       = hcloud_floating_ip.prod.ip
+  value       = hcloud_floating_ip.prod.ip_address
   description = "Production server public IP — vuhom.com A records point here"
 }
 
