@@ -9,9 +9,9 @@ output "server_private_ip" {
 
 output "domains" {
   value = {
-    root    = "vuhom.com"
-    api     = "api.vuhom.com"
-    www     = "www.vuhom.com"
+    root = "vuhom.com"
+    api  = "api.vuhom.com"
+    www  = "www.vuhom.com"
   }
 }
 

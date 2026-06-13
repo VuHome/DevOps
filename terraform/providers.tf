@@ -13,9 +13,9 @@ terraform {
   }
 
   backend "s3" {
-    bucket                      = "vuhom-tfstate"
-    key                         = "prod/terraform.tfstate"
-    region                      = "fsn1"
+    bucket = "vuhom-tfstate"
+    key    = "prod/terraform.tfstate"
+    region = "fsn1"
     endpoints = {
       s3 = "https://fsn1.your-objectstorage.com"
     }
