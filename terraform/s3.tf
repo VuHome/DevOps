@@ -1,5 +1,5 @@
 locals {
-  buckets = ["listing", "profile", "operator"]
+  buckets = ["vuhom-listing", "vuhom-profile", "vuhom-operator"]
 }
 
 resource "aws_s3_bucket" "app" {

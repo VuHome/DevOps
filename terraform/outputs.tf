@@ -20,5 +20,6 @@ output "s3_endpoint" {
 }
 
 output "s3_buckets" {
-  value = local.buckets
+  value       = local.buckets
+  description = "Bucket names to use in app env vars (MINIO_BUCKET_*)"
 }
