@@ -1,0 +1,17 @@
+services:
+  platform:
+    image: ghcr.io/vuhome/platform:latest
+    container_name: vuhom-platform
+    restart: unless-stopped
+    networks:
+      - proxy
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.platform.rule=Host(`vuhom.com`) || Host(`www.vuhom.com`)
+      - traefik.http.routers.platform.entrypoints=https
+      - traefik.http.routers.platform.tls.certresolver=letsencrypt
+      - traefik.http.services.platform.loadbalancer.server.port=3000
+
+networks:
+  proxy:
+    external: true
