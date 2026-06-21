@@ -16,6 +16,14 @@ http:
         certResolver: letsencrypt
       service: api
 
+    admin:
+      rule: "Host(`admin.vuhom.com`)"
+      entryPoints:
+        - https
+      tls:
+        certResolver: letsencrypt
+      service: admin
+
   services:
     platform:
       loadBalancer:
@@ -26,3 +34,8 @@ http:
       loadBalancer:
         servers:
           - url: "http://vuhom-api:8003"
+
+    admin:
+      loadBalancer:
+        servers:
+          - url: "http://vuhom-admin:80"
