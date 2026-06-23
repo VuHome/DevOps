@@ -1,0 +1,11 @@
+services:
+  vuhom-admin:
+    image: ghcr.io/vuhome/admin:latest
+    container_name: vuhom-admin
+    restart: unless-stopped
+    networks:
+      - proxy
+
+networks:
+  proxy:
+    external: true

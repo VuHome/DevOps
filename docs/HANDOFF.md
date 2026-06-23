@@ -34,7 +34,9 @@ All deploy operations use the primary IP `91.107.169.203`. The floating IP `78.4
 | `vuhom.com` | `78.46.253.50` | DNS-only |
 | `*.vuhom.com` | `78.46.253.50` | DNS-only |
 
-Cloudflare proxy is intentionally OFF. Traefik handles TLS directly.
+`admin.vuhom.com` and `api.vuhom.com` resolve via the `*.vuhom.com` wildcard — no separate records needed. Cloudflare proxy is intentionally OFF. Traefik handles TLS directly.
+
+Cloudflare also runs **Email Routing** on `vuhom.com` and `lotusion.com` (MX = `route1/2/3.mx.cloudflare.net`). See the Email section below.
 
 ### S3 — Hetzner Object Storage (fsn1)
 
@@ -72,6 +74,8 @@ Terraform state in `vuhom-tfstate` S3 bucket. Config in `DevOps/terraform/`.
   platform/      ← Next.js app
     docker-compose.yml
     .env
+  admin/         ← React/Vite admin panel (nginx)
+    docker-compose.yml
   db/            ← Postgres + Redis
     docker-compose.yml
     .env          ← POSTGRES_PASS, REDIS_PASS
@@ -90,8 +94,9 @@ Docker network: `proxy` (external, all services attached)
 | Container | Image | Port | Notes |
 |---|---|---|---|
 | `traefik` | traefik:v3.3 | 80, 443 | File provider — no Docker socket |
-| `vuhom-api` | ghcr.io/vuhome/api:latest | 8003 | FastAPI, Celery worker embedded |
-| `vuhom-platform` | ghcr.io/vuhome/platform:latest | 3000 | Next.js |
+| `vuhom-api` | ghcr.io/vuhome/api:latest | 8003 | FastAPI, Celery worker embedded → api.vuhom.com |
+| `vuhom-platform` | ghcr.io/vuhome/platform:latest | 3000 | Next.js → vuhom.com |
+| `vuhom-admin` | ghcr.io/vuhome/admin:latest | 80 | React/Vite + nginx → admin.vuhom.com |
 | `vuhom-postgres` | postgres:16-alpine | 5432 | DB |
 | `vuhom-redis` | redis:7-alpine | 6379 | Cache, Celery broker |
 
@@ -165,10 +170,10 @@ MINIO_ACCESS_KEY=<hetzner s3 key>
 MINIO_SECRET_KEY=<hetzner s3 secret>
 
 EMAIL_PROVIDER=smtp
-SMTP_SERVER=smtp.mx.cloudflare.net
-EMAIL_SMTP_PORT=465
-EMAIL_SENDER_USERNAME=api_token
-EMAIL_SENDER_PASSWORD=<cloudflare email api token>
+SMTP_SERVER=smtp.resend.com
+EMAIL_SMTP_PORT=587
+EMAIL_SENDER_USERNAME=resend
+EMAIL_SENDER_PASSWORD=<resend api key>
 SENDER_EMAIL=noreply@vuhom.com
 FROM_ADDRESS=noreply@vuhom.com
 
@@ -182,13 +187,23 @@ STRIPE_MOCK_MODE=true       ← switch to false when keys arrive
 
 Phone numbers use `phonenumbers` library (E.164 normalization). Only Canadian numbers are allowed (`ALLOWED_ISOS = {"ca"}`). The `validate_phone_number()` function in `modules/auth/schema.py` normalizes to E.164 (`+1XXXXXXXXXX` format) before storing in Redis OTP cache. All lookups (signup → verify) must use the same normalized format.
 
-### Email provider — port 465 vs 587
+### Email — two separate systems
 
-`modules/notifications/providers/email_provider.py` detects the port:
-- Port 465 → `smtplib.SMTP_SSL` (implicit SSL, Cloudflare's SMTPS)
-- Port 587 → `smtplib.SMTP` + `starttls()` (STARTTLS)
+**Receiving (inbound mail to @vuhom.com / @lotusion.com):** Cloudflare Email Routing.
+Catch-all (`*@`) forwards to `amirarabsalmani75@gmail.com`. MX records are
+`route1/2/3.mx.cloudflare.net` (CF-managed/locked — you cannot edit MX while routing is on;
+disable routing first if you must). Cloudflare Email Routing is **receive-only** — it CANNOT send.
 
-The server `.env` uses port 465 with Cloudflare. This is correct.
+**Sending (app transactional email — OTP, welcome, etc.):** Resend (`smtp.resend.com:587`, STARTTLS).
+`modules/notifications/providers/email_provider.py` picks the transport by port:
+- Port 587 → `smtplib.SMTP` + `starttls()` (STARTTLS) ← what we use
+- Port 465 → `smtplib.SMTP_SSL` (implicit SSL) ← **blocked outbound on Hetzner, do not use**
+
+To finish email sending: create Resend account, verify `vuhom.com` (add its DKIM + SPF to
+Cloudflare DNS, merging the SPF with the existing `include:_spf.mx.cloudflare.net`), put the
+API key in `EMAIL_SENDER_PASSWORD` on the server, restart the API.
+
+Prior provider **Abrino** (abrino.email) is fully removed from DNS and code.
 
 ### Notification providers
 
@@ -317,4 +332,4 @@ docker exec vuhom-api python -m script.create_super_admin
 
 **Why Hetzner S3 not AWS S3?** Cost. Hetzner fsn1 object storage is in the same datacenter as the server, so egress is free between services.
 
-**Why Cloudflare email routing?** The domain is already on Cloudflare. `noreply@vuhom.com` routes through Cloudflare's SMTP relay (`smtp.mx.cloudflare.net:465`). No separate email service needed at current scale.
+**Why Resend for sending + Cloudflare for receiving?** Cloudflare Email Routing is free and already on the domain, but it only *receives/forwards* — it cannot send. A dedicated transactional provider is required for app email. Resend was chosen: free tier (3,000/month), simple DKIM setup, and `smtp.resend.com:587` is reachable from Hetzner (port 465 is blocked outbound there). The earlier assumption that `smtp.mx.cloudflare.net` could send was wrong — it is an inbound MX host only.

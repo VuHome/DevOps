@@ -11,3 +11,8 @@ terraform/override.tf.json
 *.txt
 *.env
 .env*
+
+# Cloudflare credentials - never commit (CF auto-revokes exposed tokens)
+cf-data.txt
+*-data.txt
+*.secret
