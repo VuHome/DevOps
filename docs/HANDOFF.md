@@ -199,9 +199,10 @@ disable routing first if you must). Cloudflare Email Routing is **receive-only**
 - Port 587 → `smtplib.SMTP` + `starttls()` (STARTTLS) ← what we use
 - Port 465 → `smtplib.SMTP_SSL` (implicit SSL) ← **blocked outbound on Hetzner, do not use**
 
-To finish email sending: create Resend account, verify `vuhom.com` (add its DKIM + SPF to
-Cloudflare DNS, merging the SPF with the existing `include:_spf.mx.cloudflare.net`), put the
-API key in `EMAIL_SENDER_PASSWORD` on the server, restart the API.
+Status: **LIVE.** `vuhom.com` is verified in Resend (account `it@lotusion.com`). The app sends
+from `noreply@vuhom.com`; OTP delivery is confirmed. Resend DNS on Cloudflare: `resend._domainkey`
+(DKIM TXT), `send` MX → `feedback-smtp.us-east-1.amazonses.com`, `send` TXT → amazonses SPF.
+These coexist with Cloudflare Email Routing (which owns the apex MX) — no conflict.
 
 Prior provider **Abrino** (abrino.email) is fully removed from DNS and code.
 
