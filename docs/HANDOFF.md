@@ -1,7 +1,7 @@
 # Vuhom — Infrastructure & Codebase Handoff
 
-**Last updated:** 2026-06-19  
-**Status:** Production live. CI/CD operational.
+**Last updated:** 2026-06-23  
+**Status:** Production live. CI/CD operational. Platform + API + Admin all deployed. Email sending live (Resend). SMS configured (Twilio trial).
 
 ---
 
@@ -177,10 +177,16 @@ EMAIL_SENDER_PASSWORD=<resend api key>
 SENDER_EMAIL=noreply@vuhom.com
 FROM_ADDRESS=noreply@vuhom.com
 
-SMS_PROVIDER=mock           ← switch to "twilio" when keys arrive
+SMS_PROVIDER=twilio         ← LIVE (Twilio trial). See SMS section.
+TWILIO_ACCOUNT_SID=<set on server>
+TWILIO_AUTH_TOKEN=<set on server>
+TWILIO_MESSAGING_SERVICE_SID=<set on server, MG...>
+TWILIO_FROM_NUMBER=         ← intentionally empty; code uses messaging_service_sid
 PUSH_PROVIDER=mock          ← switch to "firebase" when keys arrive
 
 STRIPE_MOCK_MODE=true       ← switch to false when keys arrive
+
+ALLOW_ORIGINS=https://vuhom.com,https://www.vuhom.com,https://admin.vuhom.com
 ```
 
 ### Auth flow — phone signup
@@ -208,13 +214,18 @@ Prior provider **Abrino** (abrino.email) is fully removed from DNS and code.
 
 ### Notification providers
 
-| Provider | Env var | Current | Switch to production |
+| Provider | Env var | Current | Notes |
 |---|---|---|---|
-| Email | `EMAIL_PROVIDER` | `smtp` | Already production |
-| SMS | `SMS_PROVIDER` | `mock` | Set `twilio` + `TWILIO_*` vars |
+| Email | `EMAIL_PROVIDER` | `smtp` (Resend) | LIVE |
+| SMS | `SMS_PROVIDER` | `twilio` | LIVE (trial — see below) |
 | Push | `PUSH_PROVIDER` | `mock` | Set `firebase` + `FIREBASE_*` vars |
 
-When switching SMS: `SMS_PROVIDER=twilio`, `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER`, `TWILIO_MESSAGING_SERVICE_SID`
+**SMS (Twilio) — LIVE, trial account.** Configured 2026-06-23. Account SID + Auth Token +
+Messaging Service SID (`MG...`) are set on the server. `TWILIO_FROM_NUMBER` is left **empty on
+purpose**: `modules/notifications/providers/sms_provider.py` uses `messaging_service_sid` when
+present and ignores `from_number`. The Twilio account (name "vuhom") is a **TRIAL** — it can only
+text **verified caller IDs** (currently `+14165248181`). To text arbitrary users, **upgrade the
+Twilio account** (add funds); no code/env change needed after upgrade.
 
 When switching push: `PUSH_PROVIDER=firebase`, `FIREBASE_CREDENTIALS_PATH`, `FIREBASE_PROJECT_ID`
 
@@ -249,6 +260,34 @@ CI/CD: same pattern as API. Deploy key same.
 
 ---
 
+## Admin Panel
+
+**Repo:** `VuHome/admin` (default branch `develop`; `main` is the deploy branch)  
+**Framework:** React 18 + Vite + TypeScript, TanStack Query, Tailwind + shadcn/ui  
+**Served by:** nginx (multi-stage Docker build → static bundle)  
+**Image:** `ghcr.io/vuhome/admin:latest`  
+**URL:** `https://admin.vuhom.com`
+
+The API base URL (`https://api.vuhom.com`) is **baked in at build time** via the
+`VITE_API_BASE_URL` build-arg in the Dockerfile / CI workflow — it is NOT a runtime env var.
+To change it, edit the `build-args` in `.github/workflows/ci-cd.yml` and rebuild.
+
+**Deploy key:** the admin repo has its OWN deploy key (`vuhom-admin-deploy`, generated 2026-06-23)
+because the API/platform private key wasn't retrievable (only stored as a GitHub secret). Its
+public key is in the server's `~/.ssh/authorized_keys`; the private key is the repo's
+`SSH_DEPLOY_KEY` secret. `DEPLOY_HOST` secret = `91.107.169.203`.
+
+**Login flow:** email OTP. The UI calls `POST /admin/auth/setotp {identifier: email}` → API caches
+an OTP and emails it (via Resend) → user submits code to `POST /admin/auth/otplogin`. Log in with
+the super admin `eng.mortezamoafi@gmail.com`; the OTP arrives in that inbox.
+
+**Two bugs fixed 2026-06-23 to make login work:**
+1. API 500 — the `/admin/auth/setotp` route was missing its `db` dependency (every other admin
+   auth route had `db: AsyncSession = Depends(db_session)`). Added it + passed `db=db` to the service.
+2. CORS — `admin.vuhom.com` wasn't in the API's `ALLOW_ORIGINS`. Added it on the server `.env`.
+
+---
+
 ## Users on Server
 
 | User | Access | SSH Key |
@@ -258,16 +297,41 @@ CI/CD: same pattern as API. Deploy key same.
 
 ---
 
-## Pending (keys not yet received)
+## Pending
 
-These are placeholder env vars waiting for real credentials. Set them in `/opt/vuhom/api/.env` on the server, then restart the container.
+**Waiting on user action:**
+- **Twilio upgrade** — SMS is configured and working, but the account is a **trial** (texts only
+  verified numbers). Upgrade the Twilio account (add funds) to text arbitrary users. No env change needed.
+- **`h.asadnia@gmail.com`** — added as a second Cloudflare Email Routing destination but must click
+  its verification email. Until then, both domains' catch-all forwards to `amirarabsalmani75@gmail.com`
+  only. After verification, add it to both catch-all rules' forward `value` array.
 
-- **Twilio (SMS):** `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER`, `TWILIO_MESSAGING_SERVICE_SID` → then set `SMS_PROVIDER=twilio`
+**Waiting on keys not yet received** (set in `/opt/vuhom/api/.env`, then restart):
 - **Firebase (push):** `FIREBASE_CREDENTIALS_PATH`, `FIREBASE_PROJECT_ID` → then set `PUSH_PROVIDER=firebase`
 - **Stripe:** `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` → then set `STRIPE_MOCK_MODE=false`
 - **Social auth:** `GOOGLE_CLIENT_ID_IOS`, `GOOGLE_CLIENT_ID_ANDROID`, `GOOGLE_CLIENT_ID_WEB`, `APPLE_CLIENT_ID_IOS`, `APPLE_TEAM_ID`
 
 Restart after any `.env` change: `cd /opt/vuhom/api && docker compose up -d`
+
+---
+
+## Secrets & Credentials — where they live
+
+**Never commit secrets.** They live in two places only:
+1. **Server** `/opt/vuhom/*/.env` files (api, db, admin, platform) — the source of truth for runtime.
+2. **Local** `DevOps/cf-data.txt` and `DevOps/resend-data.txt` — the Cloudflare and Resend tokens,
+   used for API-driven DNS/domain management. These are **gitignored** (`.gitignore` has `*.txt`,
+   `cf-data.txt`, `*-data.txt`). Cloudflare and GitHub auto-revoke tokens exposed in commits — this
+   already happened once, do not repeat it.
+
+**Cloudflare:** account ID `26b112f83fd08941cf1a78dcb644266c`. Zones: `vuhom.com` =
+`b1ae590a620ffac77279e895107c051a`, `lotusion.com` = `8134f73f1f928ce6be0b75bab8548059`. The API
+token is **account-scoped** — verify it via `GET /accounts/{id}/tokens/verify`, NOT
+`/user/tokens/verify` (that returns "Invalid" for account-scoped tokens even when valid).
+
+**Resend:** account email `it@lotusion.com` (forwards to Gmail via our routing). `vuhom.com` domain
+id `0df3fba0-78b0-49b2-afd7-26e8b28969f5`, verified. Use a **full-access** key to manage domains;
+the app only needs a send-key in `EMAIL_SENDER_PASSWORD`.
 
 ---
 
