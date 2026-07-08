@@ -220,8 +220,11 @@ Prior provider **Abrino** (abrino.email) is fully removed from DNS and code.
 | SMS | `SMS_PROVIDER` | `twilio` | LIVE (trial — see below) |
 | Push | `PUSH_PROVIDER` | `mock` | Set `firebase` + `FIREBASE_*` vars |
 
-**SMS (Twilio) — LIVE, trial account.** Configured 2026-06-23. Account SID + Auth Token +
-Messaging Service SID (`MG...`) are set on the server. `TWILIO_FROM_NUMBER` is left **empty on
+**SMS (Twilio) — LIVE, delivery-confirmed, trial account.** Configured 2026-06-23; verified
+delivering 2026-07-08. Account SID + Auth Token + Messaging Service SID (`MG...`) are set on the server.
+NOTE: the `twilio` Python SDK must be in `requirements.txt` (`twilio==9.10.9`) — without it the SMS
+provider silently retries every message with `"twilio not installed"`. This was the real reason SMS
+appeared broken; credentials were always fine. `TWILIO_FROM_NUMBER` is left **empty on
 purpose**: `modules/notifications/providers/sms_provider.py` uses `messaging_service_sid` when
 present and ignores `from_number`. The Twilio account (name "vuhom") is a **TRIAL** — it can only
 text **verified caller IDs** (currently `+14165248181`). To text arbitrary users, **upgrade the
